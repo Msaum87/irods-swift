@@ -27,7 +27,7 @@
 # 2015-08-10 - v1.08 - RV - implement retries from dCache to iRODS during copy with gridftp.
 # 2015-10-14 - v1.09 - RV - implement stat function as it is being used in iRODS 4.1.6.
 # 2015-10-20 - v1.10 - RV - implement stat function for gridftp. Before it was only a simple stat
-# 2016-07-01 - v1.11 - RV - implement gridftp only script.
+# 2016-07-01 - v1.11 - RV - implement ftp only script.
 
 ##################################
 #This is Matthew Saum's modification of the UnivMSS driver to work with SWIFT storage and KeyStone Authentication.
@@ -42,7 +42,7 @@
 #chmod needs fixed up.
 
 # Changelog:
-#2017-08-03: Stolen base code from "https://github.com/cookie33/irods-compound-resource/blob/master/scripts/univMSSInterface_gridftp.sh"
+#2017-08-03: Using base code from "https://github.com/cookie33/irods-compound-resource/blob/master/scripts/univMSSInterface_ftp.sh"
 #2017-08-07: Integrated STAT command, as far as object-cache storage can anyway
 
 VERSION=v0.2
