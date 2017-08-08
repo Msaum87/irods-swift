@@ -349,11 +349,12 @@ syncToArchCurl () {
         # destFile=$2
 
         error=0
-		#Pull apart the source file path, but preserve directory structure
-		meta=$(echo $1 | rev | cut -d '/' -f 2- | rev)
-		#Keeps only the file name of the full path
-		destFile=$(echo $1 | rev | cut -d '/' -f 1 | rev)
-        _log 2 syncToArch "executing: $CURLCOMMAND -T $1 -X PUT -H \"$AUTH\" $URL/$2"
+	#Pull apart the source file path, but preserve directory structure
+	meta=$(echo $1 | rev | cut -d '/' -f 2- | rev)
+	#Keeps only the file name of the full path
+	destFile=$(echo $1 | rev | cut -d '/' -f 1 | rev)
+
+	_log 2 syncToArch "executing: $CURLCOMMAND -T $1 -X PUT -H \"$AUTH\" $URL/$2"
         status=$($CURLCOMMAND -T $1 -X PUT -H "$AUTH" $URL/$destFile   2>&1)
         error=$?
 
@@ -361,8 +362,8 @@ syncToArchCurl () {
         then
                 _log 2 syncToArch "error-message: $status"
         fi
-		metastat=$($CURLCOMMAND -X POST -H "$AUTH" $URL/$destFile -H "X-Object-Meta-Collection: $meta" 2>&1)
-		error=$?
+	metastat=$($CURLCOMMAND -X POST -H "$AUTH" $URL/$destFile -H "X-Object-Meta-Collection: $meta" 2>&1)
+	error=$?
 
         if [ $error != 0 ] # syncToArch failure on meta data
         then
