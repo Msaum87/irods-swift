@@ -39,7 +39,10 @@
 #######
 #TO-DO
 #Need to put a dismantler/packager in for 5GB size limitation of object-cache storage.
-#chmod needs fixed up.
+#chmod needs fixed up. Could be skipped, is object-cache storage
+#Need to add the meta-data in swift to pull collection info, containers can only be 1 deep. 
+# --This is to allow iRODS to drop collection info into SWIFT, and store in flat space, while still reconstructing hierarchy upon stage
+
 
 # Changelog:
 #2017-08-03: Using base code from "https://github.com/cookie33/irods-compound-resource/blob/master/scripts/univMSSInterface_ftp.sh"
@@ -144,40 +147,38 @@ URL="##REPLACE##"
 #############################################
 
 # function for the synchronization of file $1 on local disk resource to file $2 in the MSS
-syncToArch () {
+yncToArchCurl () {
+        # helper function curl
         # <your command or script to copy from cache to MSS> $1 $2
-        # e.g: /usr/local/bin/rfcp $1 rfioServerFoo:$2
-        # /bin/cp "$1" "$2"
-        _log 2 syncToArch "entering syncToArch()=$*"
+        # sourceFile=$1
+        # destFile=$2
 
-        #sourceFile=$1
-        #destFile=$2
-
-        # assign parameters and make sure a file with "," is copied
-        # add "\" before a "," in the filename
-        sourceFile=$(echo $1 | sed -e 's/,/\\,/g')
-        destFile=$(echo $2 | sed -e 's/,/\\,/g')
         error=0
+	
+	#Pull apart the source file path, but preserve directory structure
+	meta=$(echo $1 | rev | cut -d '/' -f 2- | rev)
+	#Keeps only the file name of the full path
+	destFile=$(echo $1 | rev | cut -d '/' -f 1 | rev)
+	
+        _log 2 syncToArch "executing: $CURLCOMMAND -T $1 -X PUT -H \"$AUTH\" $URL/$2"
+        status=$($CURLCOMMAND -T $1 -X PUT -H "$AUTH" $URL/$destFile   2>&1)
+        error=$?
 
-        if [ -s $1 ]
+        if [ $error != 0 ] # syncToArch failure
         then
-                # so we have a NON-empty file. Copy it
-                # Use curl to do transfers
-                syncToArchCurl $sourceFile $destFile
-                error=$?
-        else
-                _log 2 syncToArch "file \"$1\" is empty. Do not copy an empty file"
-                error=1
+                _log 2 syncToArch "error-message: $status"
         fi
+	metastat=$($CURLCOMMAND -X POST -H "$AUTH" $URL/$destFile -H "X-Object-Meta-Collection: $meta" 2>&1)
+	error=$?
 
-        if [ $error != 0 ] # copy failure
+        if [ $error != 0 ] # syncToArch failure on meta data
         then
-                STATUS="FAILURE"
+                _log 2 syncToArch "error-message: $metastat"
         fi
-        _log 2 syncToArch "The status is $error ($STATUS):"
+		
+		
         return $error
 }
-
 
 # function for staging a file $1 from the MSS to file $2 on disk
 stageToCache () {
