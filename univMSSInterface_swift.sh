@@ -16,10 +16,11 @@
 #TODO
 #Break into 5GB Max chunks (because object storage)
 #Check if exists, adjust name if needed (because object storage)
+#maybe use md5sum as unique name for all storage on object side? also for integrity checks on sync/stage?
 
 ####################################
 #Change Log
-#2017-AUG-10::Created. Updated. Modified. And tested. syncToArch and stageToCache complete. Logging complete. Debug complete
+#2017-AUG-10::Created. Updated. Modified. And tested. syncToArch and stageToCache complete. Logging complete. Debug complete. Logging for mkdir and chmod in case they are used.
 
 
 ####################################
@@ -92,8 +93,10 @@ stageToCache () {
 mkdir () {
 	# <your command to make a directory in the MSS> $1
 	# e.g.: /usr/local/bin/rfmkdir -p rfioServerFoo:$1
+	
 	op=`which mkdir`
-	`$op -p $1`
+	cmdstat=$($op -p $1 2>&1)
+	_log mkdir $? "$cmdstat" "Shouldn't be using mkdir commands in object storage. It is flat. Probably caused errors here"
 	return
 }
 
@@ -108,7 +111,8 @@ chmod () {
 	# $1 is directory
 	############
 	op=`which chmod`
-	`$op $2 $1`
+	cmdstat=$($op $2 $1 2>&1) 
+	_log mkdir $? "$cmdstat" "Shouldn't be using chmod commands in object storage. iRODS owns the whole container anyway."
 	return
 }
 
@@ -116,8 +120,8 @@ chmod () {
 rm () {
 	# <your command to remove a file from the MSS> $1
 	# e.g: /usr/local/bin/rfrm rfioServerFoo:$1
-	op=`which rm`
-	`$op $1`
+	cmdstat=$($CURLCMD -s -S -X DELETE -H "$AUTH" $URL/$1 2>&1)
+	_log rm $? "$cmdstat" "$CURLCMD -X DELETE -H \"$AUTH\" $URL/$1"
 	return
 }
 
