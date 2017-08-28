@@ -13,7 +13,7 @@
 
 
 ####################################
-#TODO
+#TO-DO
 #Break into 5GB Max chunks (because object storage)
 #Check if exists, adjust name if needed (because object storage)
 #maybe use md5sum as unique name for all storage on object side? also for integrity checks on sync/stage?
@@ -21,7 +21,8 @@
 ####################################
 #Change Log
 #2017-AUG-10::Created. Updated. Modified. And tested. syncToArch and stageToCache complete. Logging complete. Debug complete. Logging for mkdir and chmod in case they are used.
-
+#2017-AUG-11::Delete finished
+#2017-AUG-28::stat command data extraction from HTTP headers is completed
 
 ####################################
 #Pre-defined environmental variables
@@ -79,8 +80,8 @@ stageToCache () {
 	srcFile=$(echo $1 | rev | cut -d '/' -f 1 | rev)
 	
 	#pulls stored directory heirarcy
-	meta=$(curl -s -S -X GET -H "$AUTH" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n' )
-	_log stageToCache $? "Pulling meta data for original hierarchy: $meta" "curl -X GET -H \"$AUTH\" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n'"
+	meta=$($CURLCMD -s -S -X GET -H "$AUTH" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n' )
+	_log stageToCache $? "Pulling meta data for original hierarchy: $meta" "$CURLCMD -X GET -H \"$AUTH\" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n'"
 	mkstat=$(mkdir -p $meta 2>&1)
 	_log stageToCache $? "$mkstat" "mkdir -p $meta"
 	cmdstat=$($CURLCMD -s -S -X GET -H "$AUTH" $URL/$srcFile -o $meta/$srcFile 2>&1)
@@ -136,15 +137,11 @@ mv () {
 
 # function to do a stat on a file $1 stored in the MSS
 stat () {
-	op=`which stat`
-	output=`$op $1`
+	#This pulls the header stat info from curl. The "tr" removes the carriage returns and newlines, replacing them with spaces.
+	output=$($CURLCMD -I -X GET -H "$auth" $url/sync.sh -s | tr '\r\n' ' ')
+	_log stat $? "$CURLCMD -I -X GET -H "$auth" $url/sync.sh -s | tr '\r\n' ' '"
 	# <your command to retrieve stats on the file> $1
 	# e.g: output=`/usr/local/bin/rfstat rfioServerFoo:$1`
-	error=$?
-	if [ $error != 0 ] # if file does not exist or information not available
-	then
-		return $error
-	fi
 	# parse the output.
 	# Parameters to retrieve: device ID of device containing file("device"),
 	#			 file serial number ("inode"), ACL mode in octal ("mode"),
@@ -163,18 +160,32 @@ stat () {
 
 	device=` echo $output | sed -nr 's/.*\<Device: *(\S*)\>.*/\1/p'`
 	inode=`  echo $output | sed -nr 's/.*\<Inode: *(\S*)\>.*/\1/p'`
-	mode=`   echo $output | sed -nr 's/.*\<Access: *\(([0-9]*)\/.*/\1/p'`
-	nlink=`  echo $output | sed -nr 's/.*\<Links: *([0-9]*)\>.*/\1/p'`
-	uid=`	echo $output | sed -nr 's/.*\<Uid: *\( *([0-9]*)\/.*/\1/p'`
-	gid=`	echo $output | sed -nr 's/.*\<Gid: *\( *([0-9]*)\/.*/\1/p'`
+	mode="0"
+	nlink="0"
+	uid="0"
+	gid="0"
 	devid="0"
-	size=`   echo $output | sed -nr 's/.*\<Size: *([0-9]*)\>.*/\1/p'`
-	blksize=`echo $output | sed -nr 's/.*\<IO Block: *([0-9]*)\>.*/\1/p'`
-	blkcnt=` echo $output | sed -nr 's/.*\<Blocks: *([0-9]*)\>.*/\1/p'`
-	atime=`  echo $output | sed -nr 's/.*\<Access: *([0-9]{4,}-[01][0-9]-[0-3][0-9]) *([0-2][0-9]):([0-5][0-9]):([0-6][0-9])\..*/\1-\2.\3.\4/p'`
-	mtime=`  echo $output | sed -nr 's/.*\<Modify: *([0-9]{4,}-[01][0-9]-[0-3][0-9]) *([0-2][0-9]):([0-5][0-9]):([0-6][0-9])\..*/\1-\2.\3.\4/p'`
-	ctime=`  echo $output | sed -nr 's/.*\<Change: *([0-9]{4,}-[01][0-9]-[0-3][0-9]) *([0-2][0-9]):([0-5][0-9]):([0-6][0-9])\..*/\1-\2.\3.\4/p'`
+	size=$(echo $output | sed -nr 's/.*\Content-Length: *([0-9]*)\>.*/\1/p')
+	blksize="0"
+	blkcnt="0"
+	#Pulls the acces timestamp info
+	amonth=$(echo $output | sed -nr 's/.*\Date:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $2 } ')
+    amonth=$(awk -v "month=$amonth" 'BEGIN {months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"; printf "%02d", (index(months, month) + 3) / 4}')
+	aday=$(echo $output | sed -nr 's/.*\Date:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $1 } ')
+	ayear=$(echo $output | sed -nr 's/.*\Date:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $3 } ')
+	ats=$(echo $output | sed -nr 's/.*\Date:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $4 }' | tr ':' '.')
+	atime=$(echo $ayear-$amonth-$aday-$ats)
+	#pulls the last modified timestamp info
+	mmonth=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $2 } ')
+	mmonth=$(awk -v "month=$mmonth" 'BEGIN {months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"; printf "%02d", (index(months, month) + 3) / 4}')
+	mday=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $1 } ')
+	myear=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $3 } ')
+	mts=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $4 }' | tr ':' '.')
+	mtime==$(echo $myear-$mmonth-$mday-$mts)
+	ctime=$(echo $mtime)
+		
 	echo "$device:$inode:$mode:$nlink:$uid:$gid:$devid:$size:$blksize:$blkcnt:$atime:$mtime:$ctime"
+	_log stat $? "echo \"$device:$inode:$mode:$nlink:$uid:$gid:$devid:$size:$blksize:$blkcnt:$atime:$mtime:$ctime\""
 	return
 }
 	
