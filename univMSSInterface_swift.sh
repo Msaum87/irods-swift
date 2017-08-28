@@ -13,7 +13,8 @@
 
 
 ####################################
-#TO-DO
+#TODO
+#Add the SWIFT Token Auth Script into this one, with checking to run parameters.
 #Break into 5GB Max chunks (because object storage)
 #Check if exists, adjust name if needed (because object storage)
 #maybe use md5sum as unique name for all storage on object side? also for integrity checks on sync/stage?
@@ -22,7 +23,7 @@
 #Change Log
 #2017-AUG-10::Created. Updated. Modified. And tested. syncToArch and stageToCache complete. Logging complete. Debug complete. Logging for mkdir and chmod in case they are used.
 #2017-AUG-11::Delete finished
-#2017-AUG-28::stat command data extraction from HTTP headers is completed
+#2017-AUG-28::Begin STAT data extraction
 
 ####################################
 #Pre-defined environmental variables
