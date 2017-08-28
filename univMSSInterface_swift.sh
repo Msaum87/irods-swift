@@ -15,6 +15,7 @@
 ####################################
 #TODO
 #Add the SWIFT Token Auth Script into this one, with checking to run parameters.
+#Fix the $AUTH and $URL variables for a more flexible solution (still having my local folders for testing)
 #Break into 5GB Max chunks (because object storage)
 #Check if exists, adjust name if needed (because object storage)
 #maybe use md5sum as unique name for all storage on object side? also for integrity checks on sync/stage?
