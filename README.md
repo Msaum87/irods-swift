@@ -4,7 +4,7 @@ Steps on using a UnivMSS Resource to link iRODS to a Swift cluster that uses Key
 
 Made this because Keystone Authentication seems to break S3 plugins all over.
 
-Initial Setup:
+#Initial Setup:
 Create a file for our keystone token to be stored in, also letting us track the 24hour lifetime:
 
 touch /var/lib/irods/iRODS/server/bin/cmd/swiftauth.txt
