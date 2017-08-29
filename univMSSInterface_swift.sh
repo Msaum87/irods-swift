@@ -19,6 +19,7 @@
 #Break into 5GB Max chunks (because object storage)
 #Check if exists, adjust name if needed (because object storage)
 #maybe use md5sum as unique name for all storage on object side? also for integrity checks on sync/stage?
+#FIX DEBUG- Turns out Curl returns 0 even when errors occured in HTTP.  a proper curl command returning an Unathorized still returns 0
 
 ####################################
 #Change Log
@@ -36,7 +37,7 @@ TS=$(date +"%Y:%m:%d-%T")
 
 #DEBUG Values:
 #0 is no logging
-#1 is errors only
+#1 is errors only (invalid curl commands and such. Curl that succeeds, but returns an HTTP error shows up as successful command)
 #2 is every action
 DEBUG=2
 
@@ -66,9 +67,9 @@ syncToArch () {
 	destFile=$(echo $2 | rev | cut -d '/' -f 1 | rev)
 	#This is our function running
 	cmdstat=$($CURLCMD -s -S -T $1 -X PUT -H "$AUTH" $URL/$destFile 2>&1)
-	_log  syncToArch $? "$cmdstat" "$CURLCMD -s -S -T $1 -X PUT -H \"$AUTH\" $URL/$destFile"
+	_log  syncToArch-copy $? "$cmdstat" "$CURLCMD -s -S -T $1 -X PUT -H \"$AUTH\" $URL/$destFile"
 	metastat=$($CURLCMD -s -S -X POST -H "$AUTH" $URL/$destFile -H "X-Object-Meta-collection: $meta" 2>&1)
-	_log  syncToArch $? "$metastat" "$CURLCMD -s -S -X POST -H \"$AUTH\" $URL/$destFile -H \"X-Object-Meta-collection: $meta\""
+	_log  syncToArch-meta $? "$metastat" "$CURLCMD -s -S -X POST -H \"$AUTH\" $URL/$destFile -H \"X-Object-Meta-collection: $meta\""
 	
 	return
 }
@@ -83,11 +84,11 @@ stageToCache () {
 	
 	#pulls stored directory heirarcy
 	meta=$($CURLCMD -s -S -X GET -H "$AUTH" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n' )
-	_log stageToCache $? "Pulling meta data for original hierarchy: $meta" "$CURLCMD -X GET -H \"$AUTH\" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n'"
+	_log stageToCache-meta $? "Pulling meta data for original hierarchy: $meta" "$CURLCMD -X GET -H \"$AUTH\" $URL/$srcFile -I | grep -i meta-collection | awk '{print $2}' | tr -d '\r\n'"
 	mkstat=$(mkdir -p $meta 2>&1)
-	_log stageToCache $? "$mkstat" "mkdir -p $meta"
+	_log stageToCache-mkdirs $? "$mkstat" "mkdir -p $meta"
 	cmdstat=$($CURLCMD -s -S -X GET -H "$AUTH" $URL/$srcFile -o $meta/$srcFile 2>&1)
-	_log stageToCache $? "$cmdstat" "$CURLCMD -X GET -H \"$AUTH\" $URL/$srcFile -o $meta/$srcFile "
+	_log stageToCache-copy $? "$cmdstat" "$CURLCMD -X GET -H \"$AUTH\" $URL/$srcFile -o $meta/$srcFile "
 	return
 }
 
@@ -134,14 +135,15 @@ mv () {
 	# e.g: /usr/local/bin/rfrename rfioServerFoo:$1 rfioServerFoo:$2
 	op=`which mv`
 	`$op $1 $2`
+	_log mv $? "Move Command called" "Shouldn't be using Move on object storage"
 	return
 }
 
 # function to do a stat on a file $1 stored in the MSS
 stat () {
 	#This pulls the header stat info from curl. The "tr" removes the carriage returns and newlines, replacing them with spaces.
-	output=$($CURLCMD -I -X GET -H "$auth" $url/sync.sh -s | tr '\r\n' ' ')
-	_log stat $? "$CURLCMD -I -X GET -H "$auth" $url/sync.sh -s | tr '\r\n' ' '"
+	output=$($CURLCMD -I -X GET -H "$auth" $url/$1 -s | tr '\r\n' ' ')
+	_log stat-headerget $? "Stat command to fill \$output for filtering" "$CURLCMD -I -X GET -H "$auth" $url/$1 -s | tr '\r\n' ' '"
 	# <your command to retrieve stats on the file> $1
 	# e.g: output=`/usr/local/bin/rfstat rfioServerFoo:$1`
 	# parse the output.
@@ -160,8 +162,8 @@ stat () {
 
 
 
-	device=` echo $output | sed -nr 's/.*\<Device: *(\S*)\>.*/\1/p'`
-	inode=`  echo $output | sed -nr 's/.*\<Inode: *(\S*)\>.*/\1/p'`
+	device="0"
+	inode="0"
 	mode="0"
 	nlink="0"
 	uid="0"
@@ -183,15 +185,13 @@ stat () {
 	mday=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $1 } ')
 	myear=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $3 } ')
 	mts=$(echo $output | sed -nr 's/.*\Last-Modified:......//p' | sed -nr 's/\GMT.*//p' | awk '{ print $4 }' | tr ':' '.')
-	mtime==$(echo $myear-$mmonth-$mday-$mts)
+	mtime=$(echo $myear-$mmonth-$mday-$mts)
 	ctime=$(echo $mtime)
 		
 	echo "$device:$inode:$mode:$nlink:$uid:$gid:$devid:$size:$blksize:$blkcnt:$atime:$mtime:$ctime"
-	_log stat $? "echo \"$device:$inode:$mode:$nlink:$uid:$gid:$devid:$size:$blksize:$blkcnt:$atime:$mtime:$ctime\""
+	_log stat $? "Echoing the full stat values" "echo \"$device:$inode:$mode:$nlink:$uid:$gid:$devid:$size:$blksize:$blkcnt:$atime:$mtime:$ctime\""
 	return
 }
-	
-
 #################################################
 #Helper Functions (logging & auth token handling)
 #################################################
@@ -202,6 +202,7 @@ stat () {
 # where $2 was the return value of the command
 # where $3 was the return status text
 # where $4 is a full syntax copy
+#
 # log calling looks like this:
 # _log syncToArch $? $status "COMMAND SYNTAX"
 
